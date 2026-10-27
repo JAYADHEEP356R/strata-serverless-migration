@@ -1,0 +1,121 @@
+bundle:
+  name: workspace-migration-agent-jr
+variables:
+  catalog:
+    description: Approved Unity Catalog catalog
+  schema:
+    description: New project-owned schema created by the provision command
+  app_name:
+    description: Unique name for the new read-only migration interface
+    default: migration-agent-jr
+sync:
+  exclude:
+  - .local/**
+  - tests/**
+  - scripts/**
+  - frontend/**
+  - docs/**
+  - licenses/**
+  - RELEASE_MANIFEST.json
+  - THIRD_PARTY_NOTICES.md
+resources:
+  apps:
+    migration_app:
+      name: ${var.app_name}
+      description: Read-only migration readiness and validation evidence for project
+        workloads.
+      source_code_path: ./app
+      compute_size: MEDIUM
+      resources:
+      - name: migration-artifacts
+        uc_securable:
+          securable_full_name: ${var.catalog}.${var.schema}.artifacts
+          securable_type: VOLUME
+          permission: READ_VOLUME
+      - name: migration-plans
+        uc_securable:
+          securable_full_name: ${var.catalog}.${var.schema}.plans
+          securable_type: VOLUME
+          permission: WRITE_VOLUME
+      - name: migration-discovery-job
+        job:
+          id: ${resources.jobs.discover_assess.id}
+          permission: CAN_MANAGE_RUN
+      - name: migration-execution-job
+        job:
+          id: ${resources.jobs.execute_demo.id}
+          permission: CAN_MANAGE_RUN
+  jobs:
+    execute_demo:
+      name: migration-agent-executor
+      description: Creates only a serverless candidate for an approved supported plan
+        and compares it with a selected successful original run.
+      max_concurrent_runs: 1
+      timeout_seconds: 2400
+      tags:
+        Project: serverless-migration-challenge-jr
+        Purpose: demo-migration-execution
+      parameters:
+      - name: execution_id
+        default: ''
+      environments:
+      - environment_key: executor
+        spec:
+          environment_version: '4'
+          dependencies:
+          - databricks-sdk==0.157.0
+      tasks:
+      - task_key: execute_demo
+        environment_key: executor
+        timeout_seconds: 2300
+        max_retries: 0
+        notebook_task:
+          notebook_path: ./notebooks/execute_demo.py
+          base_parameters:
+            execution_id: '{{job.parameters.execution_id}}'
+            catalog: ${var.catalog}
+            schema: ${var.schema}
+            source_root: ${workspace.file_path}/src
+            source_job_id: ''
+            classic_cluster_id: ''
+            runner_job_id: '{{job.id}}'
+            baseline_mode: existing_source_run
+    discover_assess:
+      name: migration-agent-discover-assess
+      description: Read-only discovery and compatibility assessment; writes only to
+        the project schema and volume.
+      max_concurrent_runs: 1
+      timeout_seconds: 900
+      performance_target: PERFORMANCE_OPTIMIZED
+      tags:
+        Project: serverless-migration-challenge-jr
+        Purpose: discovery-assessment
+      parameters:
+      - name: scope
+        default: project
+      environments:
+      - environment_key: scanner
+        spec:
+          environment_version: '4'
+          dependencies:
+          - databricks-sdk==0.157.0
+      tasks:
+      - task_key: discover_assess
+        environment_key: scanner
+        timeout_seconds: 900
+        max_retries: 0
+        notebook_task:
+          notebook_path: ./notebooks/discover_assess.py
+          base_parameters:
+            catalog: ${var.catalog}
+            schema: ${var.schema}
+            scope: '{{job.parameters.scope}}'
+            scan_id: '{{job.run_id}}'
+            project_root: ${workspace.file_path}
+            source_root: ${workspace.file_path}/src
+targets:
+  agent:
+    default: true
+    mode: development
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}

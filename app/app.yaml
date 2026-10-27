@@ -1,0 +1,25 @@
+command:
+- python
+- launch.py
+env:
+- name: MIGRATION_ARTIFACTS_VOLUME
+  valueFrom: migration-artifacts
+- name: MIGRATION_REQUIRE_SNAPSHOT
+  value: 'true'
+- name: MIGRATION_AUTH_MODE
+  value: databricks
+- name: MIGRATION_PLANS_VOLUME
+  valueFrom: migration-plans
+- name: MIGRATION_REQUIRE_PLANNER
+  value: 'true'
+- name: MIGRATION_DISCOVERY_JOB
+  valueFrom: migration-discovery-job
+- name: MIGRATION_EXECUTION_JOB
+  valueFrom: migration-execution-job
+- name: MIGRATION_REQUIRE_EXECUTOR
+  value: 'true'
+- name: MIGRATION_BASELINE_MODE
+  value: existing_source_run
+
+- name: MIGRATION_HIDE_LEGACY_DEMOS
+  value: "true"
